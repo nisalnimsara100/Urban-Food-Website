@@ -1,4 +1,4 @@
-// server.js
+// const mongoUrl = 'mongodb+srv://nisalnimsara100:nisal@cluster0.xuu9isr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
 const express = require('express');
 const oracledb = require('oracledb');
 const cors = require('cors');
@@ -114,17 +114,36 @@ app.get('/test-mongodb', async (req, res) => {
   }
 });
 
+// New endpoint to fetch testimonials from MongoDB Atlas
+app.get('/api/testimonials', async (req, res) => {
+  try {
+    if (!mongoDB) {
+      await initMongoDB();
+    }
+
+    const testimonialsCollection = mongoDB.collection('testimonials');
+    const testimonials = await testimonialsCollection.find({}).toArray();
+    console.log('Fetched testimonials from MongoDB Atlas:', testimonials);
+
+    res.status(200).json(testimonials);
+  } catch (err) {
+    console.error('Failed to fetch testimonials:', err);
+    res.status(500).json({
+      error: 'Failed to fetch testimonials',
+      details: err.message,
+    });
+  }
+});
+
 // Gracefully close the OracleDB pool and MongoDB connection on server shutdown
 process.on('SIGTERM', async () => {
   console.log('Closing connections...');
   try {
-    // Close OracleDB pool
     if (pool) {
       await pool.close(10);
       console.log('OracleDB connection pool closed');
     }
 
-    // Close MongoDB connection
     if (mongoClient) {
       await mongoClient.close();
       console.log('MongoDB Atlas connection closed');
@@ -147,7 +166,6 @@ exports.getPool = () => {
 
 // Function to mount routes
 function mountRoutes() {
-  // Include user routes
   try {
     const userRoutes = require('./routes/userRoutes');
     console.log('User routes module loaded:', userRoutes);
@@ -157,17 +175,16 @@ function mountRoutes() {
     console.error('Failed to load user routes:', err);
   }
 
-  // Include menu routes
   try {
     const menuRoutes = require('./routes/menuRoutes');
     console.log('Menu routes module loaded:', menuRoutes);
     app.use('/api/menu', menuRoutes);
-    console.log('Menu routes mounted successfully');
+    console.log('Menu routes mounted successfully at /api/menu');
+    console.log('Registered routes:', app._router.stack.map(layer => layer?.route?.path || layer?.regexp?.toString()));
   } catch (err) {
     console.error('Failed to load menu routes:', err.message, err.stack);
   }
 
-  // Include cart routes
   try {
     const cartRoutes = require('./routes/cartRoutes');
     console.log('Cart routes module loaded:', cartRoutes);
@@ -182,10 +199,9 @@ function mountRoutes() {
 Promise.all([initPool(), initMongoDB()])
   .then(() => {
     console.log('Pool and MongoDB initialization complete, mounting routes...');
-    // Share the MongoDB connection with mongodb.js
     const { setMongoDB } = require('./mongodb');
     setMongoDB(mongoDB);
-    mountRoutes(); // Mount routes after both are initialized
+    mountRoutes();
 
     const PORT = 5001;
     app.listen(PORT, () => {

@@ -5,12 +5,13 @@ import { useNavigate } from 'react-router-dom';
 function Home() {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [suggestedProducts, setSuggestedProducts] = useState([]);
+  const [testimonials, setTestimonials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cart, setCart] = useState({});
   const navigate = useNavigate();
 
-  // Function to handle adding items to cart
+  // Function to handle adding items to cart (used in Suggested Products)
   const addToCart = (itemId) => {
     setCart(prevCart => ({
       ...prevCart,
@@ -19,50 +20,81 @@ function Home() {
     console.log(`Added item ${itemId} to cart. Current quantity: ${cart[itemId] ? cart[itemId] + 1 : 1}`);
   };
 
-  // Fetch featured and suggested products
+  // Function to render ratings (from Menu.jsx)
+  const renderRating = (rating) => {
+    const ratingOutOf10 = rating * 2;
+    return (
+      <div className="flex items-center">
+        {rating > 0 ? (
+          <>
+            <svg
+              className="w-5 h-5 text-yellow-500 mr-1"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+            </svg>
+            <span className="text-gray-600 text-sm">{ratingOutOf10.toFixed(1)}</span>
+          </>
+        ) : (
+          <span className="text-gray-600 text-sm">No ratings yet</span>
+        )}
+      </div>
+    );
+  };
+
+  // Fetch featured products, suggested products, and testimonials
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get('http://localhost:5001/api/menu');
-        
-        // Get 8 random items (4 for featured, 4 for suggested)
-        const shuffled = [...response.data].sort(() => 0.5 - Math.random());
-        
+
+        // Fetch menu items
+        const menuResponse = await axios.get('http://localhost:5001/api/menu');
+        const shuffled = [...menuResponse.data].sort(() => 0.5 - Math.random());
+
         const featured = shuffled.slice(0, 4).map(item => ({
           id: item.item_id,
           name: item.name,
           price: item.price,
           image: item.image,
-          description: item.description
+          description: item.description,
+          ratings: item.ratings // Include ratings from MongoDB
         }));
-        
+
         const suggested = shuffled.slice(4, 8).map(item => ({
           id: item.item_id,
           name: item.name,
           price: item.price,
           image: item.image,
-          discount: `${Math.floor(Math.random() * 20) + 5}% off`
+          discount: `${Math.floor(Math.random() * 20) + 5}% off`,
+          ratings: item.ratings // Include ratings from MongoDB
         }));
 
         setFeaturedProducts(featured);
         setSuggestedProducts(suggested);
+
+        // Fetch testimonials
+        const testimonialsResponse = await axios.get('http://localhost:5001/api/testimonials');
+        setTestimonials(testimonialsResponse.data);
+
         setLoading(false);
       } catch (err) {
-        console.error('Error fetching products:', err);
-        setError('Failed to load products. Please try again later.');
+        console.error('Error fetching data:', err);
+        setError('Failed to load data. Please try again later.');
         setLoading(false);
       }
     };
 
-    fetchProducts();
+    fetchData();
   }, []);
 
   if (loading) {
     return (
       <main className="flex-grow bg-[#FAFAFA] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-lg text-gray-600">Loading products...</p>
+          <p className="text-lg text-gray-600">Loading...</p>
         </div>
       </main>
     );
@@ -120,12 +152,9 @@ function Home() {
               />
               <h3 className="text-lg font-semibold text-[#4A4A4A] font-[Poppins] text-center">{product.name}</h3>
               <p className="text-[#6B7280] text-center font-[Poppins]">${product.price}</p>
-              <button 
-                onClick={() => addToCart(product.id)}
-                className="mt-4 w-full bg-[#8BC34A] text-black py-2 rounded-md hover:bg-[#7CB342] transition-colors duration-300 font-[Poppins]"
-              >
-                Add to Cart {cart[product.id] ? `(${cart[product.id]})` : ''}
-              </button>
+              <div className="flex justify-center mt-2">
+                {renderRating(product.ratings)}
+              </div>
             </div>
           ))}
         </div>
@@ -152,6 +181,9 @@ function Home() {
               />
               <h3 className="text-lg font-semibold text-[#4A4A4A] font-[Poppins] text-center">{product.name}</h3>
               <p className="text-[#6B7280] text-center font-[Poppins]">${product.price}</p>
+              <div className="flex justify-center mt-2">
+                {renderRating(product.ratings)}
+              </div>
               {product.discount && (
                 <span className="absolute top-3 right-3 bg-[#EF4444] text-white text-xs font-semibold px-2 py-1 rounded-full font-[Poppins]">
                   {product.discount}
@@ -163,6 +195,27 @@ function Home() {
               >
                 Add to Cart {cart[product.id] ? `(${cart[product.id]})` : ''}
               </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section className="container mx-auto px-4 py-12">
+        <h2 className="text-2xl md:text-3xl font-bold text-[#4A4A4A] font-[Poppins] text-center mb-8">What Our Customers Say</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {testimonials.map((testimonial, index) => (
+            <div key={index} className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center mb-4">
+                {renderRating(testimonial.rating)}
+              </div>
+              <p className="text-gray-600 font-[Poppins] mb-4">{testimonial.comment}</p>
+              <div className="flex items-center">
+                <div>
+                  <p className="font-semibold text-[#4A4A4A] font-[Poppins]">{testimonial.name}</p>
+                  <p className="text-sm text-gray-500 font-[Poppins]">{testimonial.date}</p>
+                </div>
+              </div>
             </div>
           ))}
         </div>
