@@ -57,12 +57,26 @@ const Menu = () => {
     const fetchMenuItems = async () => {
       try {
         console.log('Menu.jsx: Fetching menu items from /api/menu...');
-        const response = await axios.get('http://localhost:5001/api/menu');
+        const response = await axios.get('http://localhost:5001/api/menu', {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         console.log('Menu.jsx: Menu items fetched successfully:', response.data);
         setMenuItems(response.data);
+        setError(null); // Clear any previous errors
       } catch (err) {
         console.error('Menu.jsx: Error fetching menu items:', err);
-        setError('Failed to load menu items. Please try again later.');
+        if (err.response) {
+          // Server responded with a status other than 2xx
+          setError(`Failed to load menu items: ${err.response.status} ${err.response.statusText}`);
+        } else if (err.request) {
+          // Request was made but no response received
+          setError('Failed to load menu items: No response from server. Please check if the backend is running.');
+        } else {
+          // Something else caused the error
+          setError(`Failed to load menu items: ${err.message}`);
+        }
       }
     };
 
@@ -138,15 +152,21 @@ const Menu = () => {
     const ratingOutOf10 = rating * 2;
     return (
       <div className="flex items-center">
-        <svg
-          className="w-5 h-5 text-yellow-500 mr-1"
-          fill="currentColor"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-        </svg>
-        <span className="text-gray-600 text-sm">{ratingOutOf10.toFixed(1)}</span>
+        {rating > 0 ? (
+          <>
+            <svg
+              className="w-5 h-5 text-yellow-500 mr-1"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+            </svg>
+            <span className="text-gray-600 text-sm">{ratingOutOf10.toFixed(1)}</span>
+          </>
+        ) : (
+          <span className="text-gray-600 text-sm">No ratings yet</span>
+        )}
       </div>
     );
   };
