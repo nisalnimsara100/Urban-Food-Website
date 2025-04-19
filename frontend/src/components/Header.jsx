@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// Header.jsx
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -13,16 +14,68 @@ const Header = () => {
     email: '',
     phone_no: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
   });
   const [showPassword, setShowPassword] = useState({
     login: false,
     register: false,
-    confirm: false
+    confirm: false,
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [cartCount, setCartCount] = useState(0);
   const navigate = useNavigate();
-  // const { setUser } = useAuth(); // If using auth context
+
+  // Load user from localStorage on mount
+  useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem('user'));
+    if (storedUser) {
+      console.log('Header.jsx: User loaded from localStorage on mount:', storedUser);
+      setCurrentUser(storedUser);
+    }
+  }, []);
+
+  // Fetch cart count when user changes
+  useEffect(() => {
+    const fetchCartCount = async () => {
+      if (currentUser) {
+        try {
+          console.log('Header.jsx: Fetching cart count for user_id:', currentUser.user_id);
+          const response = await axios.get(`http://localhost:5001/api/cart/count/${currentUser.user_id}`);
+          console.log('Header.jsx: Cart count response:', response.data);
+          setCartCount(response.data.count || 0);
+        } catch (err) {
+          console.error('Header.jsx: Error fetching cart count:', err);
+          setCartCount(0);
+        }
+      } else {
+        setCartCount(0);
+      }
+    };
+
+    fetchCartCount();
+  }, [currentUser]);
+
+  // Listen for cartUpdated event
+  useEffect(() => {
+    const handleCartUpdated = async () => {
+      if (currentUser) {
+        try {
+          const response = await axios.get(`http://localhost:5001/api/cart/count/${currentUser.user_id}`);
+          setCartCount(response.data.count || 0);
+        } catch (err) {
+          console.error('Header.jsx: Error fetching cart count on cartUpdated:', err);
+          setCartCount(0);
+        }
+      }
+    };
+
+    window.addEventListener('cartUpdated', handleCartUpdated);
+
+    return () => {
+      window.removeEventListener('cartUpdated', handleCartUpdated);
+    };
+  }, [currentUser]);
 
   const toggleAuthModal = () => {
     setIsAuthModalOpen(!isAuthModalOpen);
@@ -34,7 +87,7 @@ const Header = () => {
       email: '',
       phone_no: '',
       password: '',
-      confirmPassword: ''
+      confirmPassword: '',
     });
   };
 
@@ -46,41 +99,43 @@ const Header = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     if (isLoading) return;
-    
+
     setIsLoading(true);
     setError('');
     setSuccess('');
 
     try {
+      console.log('Header.jsx: Attempting login with:', { email: formData.email, password: formData.password });
       const response = await axios.post('http://localhost:5001/api/users/login', {
         email: formData.email,
-        password: formData.password
+        password: formData.password,
       });
 
+      console.log('Header.jsx: Login response:', response.data);
       setSuccess(response.data.message);
-      console.log('Logged in user:', response.data.user);
-      
-      // If using auth context:
-      // setUser(response.data.user);
-      
-      // Store user data in localStorage
+
       localStorage.setItem('user', JSON.stringify(response.data.user));
-      
+      console.log('Header.jsx: User stored in localStorage after login:', response.data.user);
+      setCurrentUser(response.data.user);
+
+      console.log('Header.jsx: Dispatching userUpdated event after login');
+      window.dispatchEvent(new Event('userUpdated'));
+
       setTimeout(() => {
         toggleAuthModal();
-        navigate('/profile'); // Redirect after login
+        navigate('/profile');
       }, 1500);
     } catch (err) {
-      console.error('Login error:', err.response?.data || err.message);
+      console.error('Header.jsx: Login error:', err.response?.data || err.message);
       setError(err.response?.data?.error || 'Failed to login. Please try again.');
     } finally {
       setIsLoading(false);
@@ -90,12 +145,11 @@ const Header = () => {
   const handleRegister = async (e) => {
     e.preventDefault();
     if (isLoading) return;
-    
+
     setIsLoading(true);
     setError('');
     setSuccess('');
 
-    // Password confirmation check
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       setIsLoading(false);
@@ -103,47 +157,69 @@ const Header = () => {
     }
 
     try {
+      console.log('Header.jsx: Attempting registration with:', {
+        name: formData.name,
+        email: formData.email,
+        phone_no: formData.phone_no,
+        password: formData.password,
+      });
       const response = await axios.post('http://localhost:5001/api/users/register', {
         name: formData.name,
         email: formData.email,
         phone_no: formData.phone_no,
-        password: formData.password
+        password: formData.password,
       });
 
+      console.log('Header.jsx: Registration response:', response.data);
       setSuccess(response.data.message);
-      console.log('Registered user ID:', response.data.user_id);
-      
-      // Auto-login after registration
+
+      // Log in the user after registration
       const loginResponse = await axios.post('http://localhost:5001/api/users/login', {
         email: formData.email,
-        password: formData.password
+        password: formData.password,
       });
 
+      console.log('Header.jsx: Login after registration response:', loginResponse.data);
       localStorage.setItem('user', JSON.stringify(loginResponse.data.user));
-      
+      console.log('Header.jsx: User stored in localStorage after registration:', loginResponse.data.user);
+      setCurrentUser(loginResponse.data.user);
+
+      console.log('Header.jsx: Dispatching userUpdated event after registration');
+      window.dispatchEvent(new Event('userUpdated'));
+
       setTimeout(() => {
         toggleAuthModal();
-        navigate('/profile'); // Redirect after registration
+        navigate('/profile');
       }, 1500);
     } catch (err) {
-      console.error('Registration error:', err.response?.data || err.message);
+      console.error('Header.jsx: Registration error:', err.response?.data || err.message);
       setError(err.response?.data?.error || 'Failed to register. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    setCurrentUser(null);
+    setCartCount(0);
+
+    console.log('Header.jsx: Dispatching userUpdated event after logout');
+    window.dispatchEvent(new Event('userUpdated'));
+
+    navigate('/');
+  };
+
   const togglePasswordVisibility = (field) => {
-    setShowPassword(prev => ({
+    setShowPassword((prev) => ({
       ...prev,
-      [field]: !prev[field]
+      [field]: !prev[field],
     }));
   };
 
   return (
     <header className="bg-[#F5F5DC] text-[#4A4A4A] shadow-md sticky top-0 z-50 w-full">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Logo */}
         <div className="flex items-center space-x-2">
           <Link to="/" className="flex items-center">
             <svg
@@ -159,12 +235,11 @@ const Header = () => {
           </Link>
         </div>
 
-        {/* Desktop Navigation */}
         <nav className="hidden md:flex space-x-6">
           <Link to="/" className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]">
             Home
           </Link>
-          <Link to="/menu" className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]">
+          <Link to="/shop" className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]">
             Menu
           </Link>
           <Link to="/cart" className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]">
@@ -175,14 +250,30 @@ const Header = () => {
           </Link>
         </nav>
 
-        {/* Auth and Cart Buttons */}
         <div className="flex items-center space-x-4">
-          <button
-            onClick={toggleAuthModal}
-            className="bg-[#8BC34A] text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-[#7CB342] transition-colors duration-300 font-[Poppins]"
-          >
-            {localStorage.getItem('user') ? 'My Account' : 'Login'}
-          </button>
+          {currentUser ? (
+            <div className="flex items-center space-x-4">
+              <Link
+                to="/profile"
+                className="bg-[#8BC34A] text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-[#7CB342] transition-colors duration-300 font-[Poppins]"
+              >
+                My Account
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]"
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={toggleAuthModal}
+              className="bg-[#8BC34A] text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-[#7CB342] transition-colors duration-300 font-[Poppins]"
+            >
+              Login
+            </button>
+          )}
           <Link to="/cart" className="relative">
             <svg
               className="w-6 h-6 text-[#4A4A4A]"
@@ -194,7 +285,7 @@ const Header = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
             </svg>
             <span className="absolute -top-2 -right-2 bg-[#EF4444] text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-              0
+              {cartCount}
             </span>
           </Link>
           <button
@@ -215,27 +306,41 @@ const Header = () => {
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {isMenuOpen && (
         <div className="md:hidden bg-[#EDEDED] py-3 px-4">
           <nav className="flex flex-col space-y-3">
-            <Link to="/" className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]" onClick={() => setIsMenuOpen(false)}>
+            <Link
+              to="/"
+              className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]"
+              onClick={() => setIsMenuOpen(false)}
+            >
               Home
             </Link>
-            <Link to="/menu" className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]" onClick={() => setIsMenuOpen(false)}>
+            <Link
+              to="/shop"
+              className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]"
+              onClick={() => setIsMenuOpen(false)}
+            >
               Menu
             </Link>
-            <Link to="/cart" className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]" onClick={() => setIsMenuOpen(false)}>
+            <Link
+              to="/cart"
+              className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]"
+              onClick={() => setIsMenuOpen(false)}
+            >
               Cart
             </Link>
-            <Link to="/about" className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]" onClick={() => setIsMenuOpen(false)}>
+            <Link
+              to="/about"
+              className="text-sm font-medium hover:text-[#8BC34A] transition-colors duration-300 font-[Poppins]"
+              onClick={() => setIsMenuOpen(false)}
+            >
               About
             </Link>
           </nav>
         </div>
       )}
 
-      {/* Authentication Modal */}
       {isAuthModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
@@ -309,7 +414,12 @@ const Header = () => {
                         {showPassword.login ? (
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9s4-9 9-9 9 4 9 9a10.05 10.05 0 01-.125 1.825M12 15a3 3 0 100-6 3 3 0 000 6zm5 5l-3-3m-6 3l3-3" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9s4-9 9-9 9 4 9 9a10.05 10.05 0 01-.125 1.825M12 15a3 3 0 100-6 3 3 0 000 6zm5 5l-3-3m-6 3l3-3"
+                          />
                         )}
                       </svg>
                     </button>
@@ -317,7 +427,9 @@ const Header = () => {
 
                   <button
                     type="submit"
-                    className={`w-full bg-[#8BC34A] text-white py-2 rounded-md font-medium font-[Poppins] hover:bg-[#7CB342] transition-colors duration-300 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    className={`w-full bg-[#8BC34A] text-white py-2 rounded-md font-medium font-[Poppins] hover:bg-[#7CB342] transition-colors duration-300 ${
+                      isLoading ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
                     disabled={isLoading}
                   >
                     {isLoading ? 'Logging in...' : 'Login'}
@@ -408,14 +520,22 @@ const Header = () => {
                         {showPassword.register ? (
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9s4-9 9-9 9 4 9 9a10.05 10.05 0 01-.125 1.825M12 15a3 3 0 100-6 3 3 0 000 6zm5 5l-3-3m-6 3l3-3" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9s4-9 9-9 9 4 9 9a10.05 10.05 0 01-.125 1.825M12 15a3 3 0 100-6 3 3 0 000 6zm5 5l-3-3m-6 3l3-3"
+                          />
                         )}
                       </svg>
                     </button>
                   </div>
 
                   <div className="relative">
-                    <label htmlFor="register-confirm-password" className="block text-sm font-medium text-gray-700 font-[Poppins] mb-1">
+                    <label
+                      htmlFor="register-confirm-password"
+                      className="block text-sm font-medium text-gray-700 font-[Poppins] mb-1"
+                    >
                       Confirm Password
                     </label>
                     <input
@@ -438,7 +558,12 @@ const Header = () => {
                         {showPassword.confirm ? (
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9s4-9 9-9 9 4 9 9a10.05 10.05 0 01-.125 1.825M12 15a3 3 0 100-6 3 3 0 000 6zm5 5l-3-3m-6 3l3-3" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9s4-9 9-9 9 4 9 9a10.05 10.05 0 01-.125 1.825M12 15a3 3 0 100-6 3 3 0 000 6zm5 5l-3-3m-6 3l3-3"
+                          />
                         )}
                       </svg>
                     </button>
@@ -446,7 +571,9 @@ const Header = () => {
 
                   <button
                     type="submit"
-                    className={`w-full bg-[#8BC34A] text-white py-2 rounded-md font-medium font-[Poppins] hover:bg-[#7CB342] transition-colors duration-300 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    className={`w-full bg-[#8BC34A] text-white py-2 rounded-md font-medium font-[Poppins] hover:bg-[#7CB342] transition-colors duration-300 ${
+                      isLoading ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
                     disabled={isLoading}
                   >
                     {isLoading ? 'Registering...' : 'Register'}

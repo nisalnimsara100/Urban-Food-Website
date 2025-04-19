@@ -111,7 +111,19 @@ function mountRoutes() {
   } catch (err) {
     console.error('Failed to load menu routes:', err.message, err.stack);
   }
+
+  // Include cart routes
+  try {
+    const cartRoutes = require('./routes/cartRoutes');
+    console.log('Cart routes module loaded:', cartRoutes);
+    app.use('/api/cart', cartRoutes);
+    console.log('Cart routes mounted successfully');
+  } catch (err) {
+    console.error('Failed to load cart routes:', err.message, err.stack);
+  }
 }
+
+
 
 // Initialize the pool and start the server
 initPool()
