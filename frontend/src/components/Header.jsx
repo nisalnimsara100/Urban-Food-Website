@@ -1,30 +1,101 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 
 function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [isLoginForm, setIsLoginForm] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Add loading state
 
   const togglePopup = () => {
     setIsPopupOpen(!isPopupOpen);
+    setError('');
+    setSuccess('');
+    setIsLoading(false);
   };
 
   const switchForm = () => {
     setIsLoginForm(!isLoginForm);
+    setError('');
+    setSuccess('');
+    setIsLoading(false);
   };
 
-  // Placeholder for form submission (to be implemented based on your backend)
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Add login logic (e.g., API call) here
-    console.log('Login submitted');
+    if (isLoading) return; // Prevent multiple submissions
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+    const email = e.target['login-email'].value;
+    const password = e.target['login-password'].value;
+
+    console.log('Submitting login form with:', { email, password });
+
+    try {
+      const response = await axios.post('http://localhost:5001/api/users/login', {
+        email,
+        password,
+      });
+      console.log('Login response:', response.data);
+      setSuccess(response.data.message);
+      console.log('Logged in user:', response.data.user);
+      setTimeout(togglePopup, 1500);
+    } catch (err) {
+      console.error('Login error:', err.response?.data || err.message);
+      setError(err.response?.data?.error || 'Failed to login. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
-    // Add registration logic (e.g., API call) here
-    console.log('Register submitted');
+    if (isLoading) return; // Prevent multiple submissions
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+    const name = e.target['register-name'].value;
+    const email = e.target['register-email'].value;
+    const phone_no = e.target['register-phone'].value;
+    const password = e.target['register-password'].value;
+    const confirmPassword = e.target['register-confirm-password'].value;
+
+    console.log('Submitting register form with:', { name, email, phone_no, password, confirmPassword });
+
+    if (password !== confirmPassword) {
+      console.log('Password mismatch detected');
+      setError('Passwords do not match');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await axios.post('http://localhost:5001/api/users/register', {
+        name,
+        email,
+        phone_no,
+        password,
+      });
+      console.log('Register response:', response.data);
+      setSuccess(response.data.message);
+      console.log('Registered user ID:', response.data.user_id);
+      setTimeout(() => {
+        switchForm();
+        setSuccess('');
+      }, 1500);
+    } catch (err) {
+      console.error('Register error:', err.response?.data || err.message);
+      setError(err.response?.data?.error || 'Failed to register. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -166,6 +237,7 @@ function Header() {
               className="absolute top-3 right-3 text-[#4A4A4A] hover:text-[#8BC34A] transition-colors duration-300"
               onClick={togglePopup}
               aria-label="Close Popup"
+              disabled={isLoading}
             >
               <svg
                 className="w-6 h-6"
@@ -183,6 +255,10 @@ function Header() {
               {isLoginForm ? 'Login' : 'Register'}
             </h2>
 
+            {/* Display Success or Error Messages */}
+            {success && <p className="text-green-600 text-center mb-4 font-[Poppins]">{success}</p>}
+            {error && <p className="text-red-600 text-center mb-4 font-[Poppins]">{error}</p>}
+
             {/* Form */}
             {isLoginForm ? (
               <form onSubmit={handleLogin} className="space-y-4">
@@ -196,25 +272,61 @@ function Header() {
                     placeholder="Your email"
                     className="w-full px-3 py-2 rounded-md border border-[#D1D5DB] text-[#4A4A4A] text-sm focus:outline-none focus:ring-2 focus:ring-[#8BC34A] font-[Poppins]"
                     required
+                    disabled={isLoading}
                   />
                 </div>
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-[#4A4A4A] font-[Poppins]" htmlFor="login-password">
                     Password
                   </label>
                   <input
                     id="login-password"
-                    type="password"
+                    type={showLoginPassword ? 'text' : 'password'}
                     placeholder="Your password"
                     className="w-full px-3 py-2 rounded-md border border-[#D1D5DB] text-[#4A4A4A] text-sm focus:outline-none focus:ring-2 focus:ring-[#8BC34A] font-[Poppins]"
                     required
+                    disabled={isLoading}
                   />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-9 text-[#4A4A4A] hover:text-[#8BC34A]"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                    disabled={isLoading}
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      {showLoginPassword ? (
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-3 9c-5 0-9-4-9-9s4-9 9-9 9 4 9 9-4 9-9 9z"
+                        />
+                      ) : (
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9s4-9 9-9 9 4 9 9a10.05 10.05 0 01-.125 1.825M12 15a3 3 0 100-6 3 3 0 000 6zm5 5l-3-3m-6 3l3-3"
+                        />
+                      )}
+                    </svg>
+                  </button>
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-[#8BC34A] text-white py-2 rounded-md font-medium text-sm hover:bg-[#7CB342] transition-colors duration-300 font-[Poppins]"
+                  className={`w-full bg-[#8BC34A] text-white py-2 rounded-md font-medium text-sm hover:bg-[#7CB342] transition-colors duration-300 font-[Poppins] ${
+                    isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  disabled={isLoading}
                 >
-                  Login
+                  {isLoading ? 'Logging in...' : 'Login'}
                 </button>
               </form>
             ) : (
@@ -229,6 +341,7 @@ function Header() {
                     placeholder="Your name"
                     className="w-full px-3 py-2 rounded-md border border-[#D1D5DB] text-[#4A4A4A] text-sm focus:outline-none focus:ring-2 focus:ring-[#8BC34A] font-[Poppins]"
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div>
@@ -241,6 +354,7 @@ function Header() {
                     placeholder="Your email"
                     className="w-full px-3 py-2 rounded-md border border-[#D1D5DB] text-[#4A4A4A] text-sm focus:outline-none focus:ring-2 focus:ring-[#8BC34A] font-[Poppins]"
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div>
@@ -253,25 +367,105 @@ function Header() {
                     placeholder="Your Phone No"
                     className="w-full px-3 py-2 rounded-md border border-[#D1D5DB] text-[#4A4A4A] text-sm focus:outline-none focus:ring-2 focus:ring-[#8BC34A] font-[Poppins]"
                     required
+                    disabled={isLoading}
                   />
                 </div>
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-[#4A4A4A] font-[Poppins]" htmlFor="register-password">
                     Password
                   </label>
                   <input
                     id="register-password"
-                    type="password"
+                    type={showRegisterPassword ? 'text' : 'password'}
                     placeholder="Your password"
                     className="w-full px-3 py-2 rounded-md border border-[#D1D5DB] text-[#4A4A4A] text-sm focus:outline-none focus:ring-2 focus:ring-[#8BC34A] font-[Poppins]"
                     required
+                    disabled={isLoading}
                   />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-9 text-[#4A4A4A] hover:text-[#8BC34A]"
+                    onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                    aria-label={showRegisterPassword ? 'Hide password' : 'Show password'}
+                    disabled={isLoading}
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      {showRegisterPassword ? (
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-3 9c-5 0-9-4-9-9s4-9 9-9 9 4 9 9-4 9-9 9z"
+                        />
+                      ) : (
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9s4-9 9-9 9 4 9 9a10.05 10.05 0 01-.125 1.825M12 15a3 3 0 100-6 3 3 0 000 6zm5 5l-3-3m-6 3l3-3"
+                        />
+                      )}
+                    </svg>
+                  </button>
+                </div>
+                <div className="relative">
+                  <label className="block text-sm font-medium text-[#4A4A4A] font-[Poppins]" htmlFor="register-confirm-password">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="register-confirm-password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Confirm your password"
+                    className="w-full px-3 py-2 rounded-md border border-[#D1D5DB] text-[#4A4A4A] text-sm focus:outline-none focus:ring-2 focus:ring-[#8BC34A] font-[Poppins]"
+                    required
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-9 text-[#4A4A4A] hover:text-[#8BC34A]"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    disabled={isLoading}
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      {showConfirmPassword ? (
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-3 9c-5 0-9-4-9-9s4-9 9-9 9 4 9 9-4 9-9 9z"
+                        />
+                      ) : (
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-4-9-9s4-9 9-9 9 4 9 9a10.05 10.05 0 01-.125 1.825M12 15a3 3 0 100-6 3 3 0 000 6zm5 5l-3-3m-6 3l3-3"
+                        />
+                      )}
+                    </svg>
+                  </button>
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-[#8BC34A] text-white py-2 rounded-md font-medium text-sm hover:bg-[#7CB342] transition-colors duration-300 font-[Poppins]"
+                  className={`w-full bg-[#8BC34A] text-white py-2 rounded-md font-medium text-sm hover:bg-[#7CB342] transition-colors duration-300 font-[Poppins] ${
+                    isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  disabled={isLoading}
                 >
-                  Register
+                  {isLoading ? 'Registering...' : 'Register'}
                 </button>
               </form>
             )}
@@ -283,6 +477,7 @@ function Header() {
                 type="button"
                 className="text-[#8BC34A] hover:underline"
                 onClick={switchForm}
+                disabled={isLoading}
               >
                 {isLoginForm ? 'Register' : 'Login'}
               </button>
