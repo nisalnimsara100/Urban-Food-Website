@@ -1,12 +1,13 @@
-// userController.js
 const oracledb = require('oracledb');
+const { connectToMongoDB } = require('../mongodb'); // Import MongoDB connection utility
 
-// Register a new user
+// Register a new user (updated to store OracleDB user_id in MongoDB)
 exports.registerUser = async (req, res) => {
   const { name, email, phone_no, password } = req.body;
   let connection;
 
   try {
+    // Step 1: Connect to OracleDB and register the user
     connection = await oracledb.getConnection({ poolAlias: 'default' });
 
     const binds = {
@@ -44,6 +45,30 @@ exports.registerUser = async (req, res) => {
     }
 
     const user = userResult.rows[0];
+
+    // Step 2: Connect to MongoDB and insert the user into the 'users' collection
+    try {
+      const mongoDB = await connectToMongoDB(); // Get MongoDB connection
+      const usersCollection = mongoDB.collection('users');
+
+      // Prepare the user data to insert into MongoDB, including OracleDB user_id
+      const mongoUser = {
+        oracle_user_id: user.USER_ID, // Store OracleDB user_id
+        name: user.NAME,
+        email: user.EMAIL,
+        password: password, // Note: In a production app, you should hash the password
+        created_at: new Date(user.CREATED_AT), // Convert OracleDB date to JavaScript Date
+      };
+
+      // Insert the user into MongoDB
+      const mongoResult = await usersCollection.insertOne(mongoUser);
+      console.log('User inserted into MongoDB:', mongoResult.insertedId);
+    } catch (mongoErr) {
+      console.error('Failed to insert user into MongoDB:', mongoErr);
+      // Log the error but allow registration to succeed since OracleDB is the primary DB
+    }
+
+    // Step 3: Return the response with the user data from OracleDB
     res.status(201).json({
       message: 'Registration successful',
       user_id: user.USER_ID,
@@ -69,61 +94,46 @@ exports.registerUser = async (req, res) => {
   }
 };
 
-// Login a user
+// Login a user (updated to return OracleDB user_id)
 exports.loginUser = async (req, res) => {
   const { email, password } = req.body;
-  let connection;
 
   try {
-    connection = await oracledb.getConnection({ poolAlias: 'default' });
+    // Connect to MongoDB
+    const mongoDB = await connectToMongoDB();
+    const usersCollection = mongoDB.collection('users');
 
-    const result = await connection.execute(
-      `SELECT user_id, name, email, phone_no, password, created_at
-       FROM user_registration
-       WHERE email = :email`,
-      { email },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT }
-    );
+    // Find the user by email
+    const user = await usersCollection.findOne({ email });
 
-    if (result.rows.length === 0) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-
-    const user = result.rows[0];
 
     // Check password (in a real app, passwords should be hashed)
-    if (user.PASSWORD !== password) {
+    if (user.password !== password) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Remove password from the response
-    delete user.PASSWORD;
+    // Prepare the response using the OracleDB user_id
+    const userResponse = {
+      user_id: user.oracle_user_id, // Use the stored OracleDB user_id
+      name: user.name,
+      email: user.email,
+      created_at: user.created_at,
+    };
 
     res.status(200).json({
       message: 'Login successful',
-      user: {
-        user_id: user.USER_ID,
-        name: user.NAME,
-        email: user.EMAIL,
-        phone_no: user.PHONE_NO,
-        created_at: user.CREATED_AT,
-      },
+      user: userResponse,
     });
   } catch (err) {
     console.error('Error during login:', err);
     res.status(500).json({ error: 'Failed to login', details: err.message });
-  } finally {
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (err) {
-        console.error('Error closing connection:', err);
-      }
-    }
   }
 };
 
-// Get user by ID
+// Get user by ID (unchanged)
 exports.getUserById = async (req, res) => {
   const { id } = req.params;
   let connection;
@@ -162,7 +172,7 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// Get user by email
+// Get user by email (unchanged)
 exports.getUserByEmail = async (req, res) => {
   const { email } = req.query;
   let connection;
@@ -201,7 +211,7 @@ exports.getUserByEmail = async (req, res) => {
   }
 };
 
-// Update user
+// Update user (unchanged)
 exports.updateUser = async (req, res) => {
   const { id } = req.params;
   const { name, email, phone_no } = req.body;
